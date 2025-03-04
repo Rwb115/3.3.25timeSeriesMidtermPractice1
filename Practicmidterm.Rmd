@@ -1,0 +1,174 @@
+---
+title: "midtermpractice1"
+output: html_document
+date: "2025-03-03"
+---
+## R Markdown
+
+```{r setup, include=TRUE} 
+# Load required packages
+library(fpp2)
+
+## PLot and Inference
+
+# load dataset
+data("arrivals")
+
+# convert to a data frame
+arrivals_df <- as.data.frame(arrivals)
+
+# extract US arrivals
+us_arrivals <- arrivals_df$US  
+
+# convert to a quarterly time series
+us_ts <- ts(us_arrivals, start = c(1981, 1), frequency = 4)
+
+# verify
+head(us_ts)
+
+# plotting Time Series
+plot(us_ts, 
+     type = "l",
+     main = "US Arrivals to Australia (Quarterly)",
+     xlab = "Year",
+     ylab = "Number of Arrivals",
+     col  = "black")
+
+#summarizing observations on time series plot
+
+#shows an upward trend. Cycles of peaks and troughs may indicate seasonality. No real notable spikes. 
+
+## Central Tendency 
+
+summary(us_ts)
+boxplot(us_ts,
+        main = "Boxplot of US Arrivals",
+        ylab = "Number of Arrivals",
+        col = "lightgray")
+
+# summation of boxplot and summary
+
+# the median is 85.88, indicating half of the data set. The Q1 and Q3 are 63.95 and 108.98 respectively, meaning 75% of the data is in between these two values. The difference between the mean and the median is small, indicating no explicit extreme presence pulling the data either direction. The minimum number of arrivals is 23.72, and the max is 136.09, showing the range of data. 
+
+## Decomposition
+
+adddecomp_modelus <- decompose(us_ts, type = "additive")
+
+plot(adddecomp_modelus)
+
+# the time series is seasonal, shown by the seasonal component's cycles/wave like pattern
+
+# the decomposition is additive, the seasonal pattern does not greatly vary in peaks and troughs and stays consistent
+
+#display values of quarters
+seasonal_component <- adddecomp_modelus$seasonal
+tapply(seasonal_component, cycle(us_ts),mean)
+
+# Q1 has the highest values while Q2 is the lowest
+
+# the seasonal indicies indicate high arrivals in Q1 and Q4 while lower arrivals in between. The seasonality may be due to holiday travel in Q4 and travel back from holidays in Q1, while inbetween is slower due to low demand to travel
+
+# plot time series adjusted for seasonality
+seasonally_adjusted <- us_ts - adddecomp_modelus$seasonal
+
+plot(seasonally_adjusted,
+     type="l",
+     col="red",
+     main="Seasonally Adjusted US Arrivals",
+     xlab="Year",
+     ylab="Number of Arrivals")
+# overlay with actuals
+lines(us_ts, col="blue",lty=2)
+
+legend("topleft",legend=c("Seasonally Adjusted","Original"), col=c("red","blue"),lty=c(1,2),bty="n")
+
+# seasonality does have fluctuations but the flucuations themselves seem to be small. The graph retains the trend and pattern, but is overall smoother
+
+## Naive Method
+
+library(forecast)
+
+# generate naive forecast
+naive_forecast <- naive(us_ts, h=4)
+
+# plotting forecast
+plot(naive_forecast,
+     main="Naive Forecast for US Arrivals",
+     ylab="Number of Arrivals",
+     xlab="Year")
+
+# residual analysis
+residuals_naive <- residuals(naive_forecast)
+
+# plot residuals
+plot(residuals_naive, type="o", col="blue",
+     main="Residuals of Naïve Forecast", 
+     ylab="Residuals", xlab="Time")
+abline(h=0, col="red")
+
+# there is no pattern to be seen in the residuals in terms of over or underestimation. The residuals are close together in earlier years but gain volatility as the years progress, suggesting that the forecast would not perform well in longer term forecasting. There is a notable outlier between 1985 and 1990 going past 30, and there are multiple points that fo past -20, so fluctuations are still present that are not accounted for. It also resembles a wave, meaning seasonality was not accounted for.
+
+#plotting histogram
+hist(residuals_naive,
+     main="Histogram of Residuals (Naive Forecast)",
+     xlab="residuals",
+     col="gray",
+     border="black",
+     breaks=20,
+     probability=TRUE)
+
+lines(density(na.omit(residuals_naive)),col="red",lwd=2)
+
+# histogram shows the residuals are normally distributed due to the bell curve like line. The errors are random, but a slight skew is present, meaning that the model does underestimate arrivals.
+
+# residuals vs fitted plot
+plot(fitted(naive_forecast), residuals_naive,
+     main="Fitted Values vs. Residuals (Naïve Forecast)",
+     xlab="Fitted Values",
+     ylab="Residuals",
+     col="blue",
+     pch=16)
+
+# Add a horizontal line at zero for reference
+abline(h=0, col="red", lwd=2)
+
+# plot shows a structure and evidence of clustering, which is problematic. There should be no structure and be visibly random, but the data clusters at the start and end. The variance is changing as time progresses rather than staying constant. Indicates the model is too simple.
+
+# residuals vs actual plot
+plot(us_ts,residuals_naive,
+     main="Actual Values vs. Residuals (Naive Forecast)",
+     xlab="Actual Values",
+     ylab="Residuals",
+     col="blue",
+     pch=16)
+abline(h=0,col="red",lwd=2)
+
+# residuals start close together but fan out as actual values increase. There are clusters present and a structure rather than randomness, with larger values usually having higher residuals. The model struggles as flights increase and seasonality is not accounted for. 
+
+Acf(residuals_naive,main="ACF Plot of Residuals (Naive Forecast)")
+#though some autocorrelation values are not past the level of significance, the majority are past the threshold, indicating that residuals are strongly correlated with time. Autocorrelation is strong consistently at 4, 8, 12, indicating seasonality that was not accounted for.
+
+#print accuracy measures
+accuracy(naive_forecast)
+
+# run forecast for next year (5 quarters)
+naive_forecast <- naive(us_ts, h=5)
+plot(naive_forecast,
+     main="Naive Forecast for US Arrivals",
+     ylab="Number of Arrivals",
+     xlab="Year")
+print(naive_forecast)
+
+# summarize forecast technique
+
+#the accuracy depends on which accuracy measure. MAE, which measures mean absolute error shows us that it is 9.7 units off on average. The MPE tells us that it slightly under predicts. The MAPE is 11.8% which means it is 11.8% off on average. The ME is small itself and close to zero, meaning errors usually balance. RMSE tells us that larger errors have more weight than smaller ones. While the model does have little bias overall, MAPE is higher than 10%, which is around a good threshold to tell what is acceptable. Overall, it is not optimal and accuracy is moderate to poor.
+#the time series value is the same number, 106.54.
+#naive is an overly simplistic model that is a good benchmark but not useful for anything else. Even if it is statistically sound, its forecasting capabilities are extremely limited, especially when dealing with data as seasonal as travel, where there are holiday seasons with notable demand in aviation. Incredibly poor, as it does not take into account seasonality and trend. The naive model assumes all future values are the most recent value. 
+
+
+
+
+
+
+
+
